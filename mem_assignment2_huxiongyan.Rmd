@@ -1,0 +1,654 @@
+---
+title: "商业数据分析第2次作业"
+author: "胡雄雁"
+date: "2024-11-30"
+header-includes:
+  - \usepackage{ctex}
+output:
+  pdf_document:
+    includes:
+      keep_tex: yes
+    latex_engine: xelatex
+  word_document: default
+---
+
+```{r start, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 准备工作：导包
+
+```{r cars}
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(knitr)
+library(tidyr)
+library(tibble)
+```
+
+## 第1题：BigBang Theory
+
+### 数据载入
+
+```{r}
+filepath <- "(C:../../BigBangTheory.csv)"
+df_bigbang <- read.csv(filepath)
+df_bigbang$Air.Date <- mdy(df_bigbang$Air.Date)
+head(df_bigbang,5)
+```
+
+### 数据分析
+
+#### 1.最小和最大观众人数  
+
+- 最小值为13.3，最大值为16.5
+
+#### 2.均值、中位数和众数  
+
+- 均值为15.04，中位数为15.0，众数有4个，分别为：13.6,14,16.1,16.2
+
+#### 3.第一和第三四分位数  
+
+- 第一分位为14.1，第三分位为16
+
+```{r}
+## 统计概览
+summary(df_bigbang)
+## 计算众数
+t_mode <- df_bigbang$Viewers..millions. %>% 
+  as_factor() %>% 
+  table()
+t_mode[t_mode==max(t_mode)]
+```
+
+#### 4.增长趋势判断  
+
+- 不具备明显的增长趋势。21年和22年观看人数有升有降，虽22年的最高观看人数大于21年的最高观看人数，但无法看出明显的增长趋势。
+
+```{r}
+ggplot(data=df_bigbang,mapping=aes(x=Air.Date,y=Viewers..millions.))+
+  geom_point()+
+  geom_line(color='red')+
+  scale_x_date(date_labels='%Y-%m-%d',breaks=df_bigbang$Air.Date)+ # 格式化日期且只显示有值的X轴标记
+  theme(axis.text.x=element_text(angle=90,hjust=1))+ # 竖着显示日期
+  labs(x='Air_Date',y='Views')
+```
+
+## 第2题：NBA Players
+
+### 数据载入
+
+```{r}
+filepath <- "(C:../../NBAPlayerPts.csv)"
+df_nba <- read.csv(filepath)
+head(df_nba,5)
+```
+
+### 数据分析
+
+#### 1.显示频率分布
+
+```{r}
+breaks <- seq(10,30,by=2)
+data_cut <- cut(df_nba$PPG,breaks=breaks,right=FALSE)  # 左闭右开区间
+# levels(data_cut) # 显示分组因子
+group_cut <- table(data_cut)
+group_cut
+```
+
+#### 2.显示相对频率分布
+
+```{r}
+group_cut_rate <- group_cut/length(df_nba$PPG)
+group_cut_rate
+```
+
+#### 3.显示累积百分比频率分布
+
+```{r}
+group_cut_cumsum <-cumsum(group_cut_rate)
+group_cut_cumsum
+```
+
+#### 4.制作场均得分的直方图
+
+```{r}
+ggplot(data=df_nba,mapping=aes(x=PPG))+
+  geom_histogram(binwidth=2,breaks=breaks)  # 以2为增量分组
+```
+
+#### 5.解释数据是否呈现偏斜  
+
+- 从直方图的分布来看，呈现出右偏特征。
+
+#### 6.有多少百分比的球员场均得分至少为20分  
+
+- 从累计百分比频率分布知为：1-0.78=0.22
+
+## 第3题：样本量估计
+
+#### 1.计算调查样本总数  
+
+- 调查样本总数为为625。
+
+```{r}
+real_std = 500
+mean_std = 20
+n = (real_std/mean_std)^2
+n
+```
+
+#### 2.计算点估计的概率
+
+- 点估计的概率为：0.7887005
+
+```{r}
+p = pnorm(25/mean_std)-pnorm(-25/mean_std)
+p
+```
+
+## 第4题：Young Professional Magazine
+
+### 数据载入
+
+```{r}
+filepath <- "(C:../../Professional.csv)"
+df_profession <- read.csv(filepath)
+head(df_profession,5)
+summary(df_profession)
+```
+
+### 数据分析
+
+#### 1.描述性统计
+
+```{r}
+# 对变量按照文本型和数值型进行分类
+c_character <- c()
+c_logical <- c()
+for (col in names(df_profession)){
+  col_class = class(df_profession[[col]])
+  if (col_class=='character'){
+    c_character <- c(c_character,col)}
+  else{c_logical <- c(c_logical,col)}
+}
+```
+
+```{r}
+# 数值型变量描述性统计
+df_profession_logical <-  select(df_profession,all_of(c_logical))
+summary(df_profession_logical)
+```
+
+```{r}
+# 文本型变量描述性统计
+df_profession_character <-  select(df_profession,all_of(c_character))
+lapply(df_profession_character,table)
+```
+
+#### 2.为订阅者的平均年龄和家庭收入制定95%的置信区间
+
+- 使用t分布进行总体均值的区间估计：平均年龄置信区间为(29.72153,30.50286),平均家庭收入置信区间为(71079.26,77839.77)
+
+```{r}
+t_evaluate <- function(df_x,r){
+  c_r <- c((1-r)/2,1-(1-r)/2)  # 置信水平上下限
+  n <- length(df_x)
+  df_n <- n-1
+  mean_x <- mean(df_x)
+  sd_x <- sd(df_x)/sqrt(n)
+  t_ci <- mean_x+qt(c_r,df_n)*sd_x
+  t_ci
+}
+cat(t_evaluate(df_profession$Age,0.95)
+    ,';'
+    ,t_evaluate(df_profession$Household.Income,0.95))
+```
+
+#### 3.为家中拥有宽带接入的订阅者比例和有孩子的订阅者比例制定95%的置信区间
+
+- 有宽带接入的订阅者比例95%的置信区间为：c(0.5775140,0.6712665)
+- 有孩子的订阅者比例95%的置信区间为：c(0.4858615,0.5824312)
+
+```{r}
+norm_p_evaluate <- function(df_x,r){
+  c_r <- c((1-r)/2,1-(1-r)/2)  # 置信水平上下限
+  n <- length(df_x)
+  mean_p_x <- sum(df_x=='Yes')/n
+  sd_p_x <- sqrt(mean_p_x*(1-mean_p_x)/n)  # 均值标准差
+  p_ci <- mean_p_x+qnorm(c_r)*sd_p_x
+  p_ci
+}
+cat(norm_p_evaluate(df_profession$Broadband.Access.,0.95)
+    ,';'
+    ,norm_p_evaluate(df_profession$Have.Children.,0.95))
+```
+
+#### 4.对在线代理商而言，《年轻专业人士》是否是一个好的广告渠道？用统计数据来支持您的结论
+
+- 是一个好的广告渠道，分析如下：
+  - 有超62%的杂志订阅用户接入了宽带，即具备线上观看广告的条件；
+  - 该杂志订阅用户超98%都有投资活动，其中超35%的用户投资额超30000，甚至存在有近0.5%的用户投资额超90000
+  - 该杂志订阅用户基本都有投资活动且投资相对频繁，其中超65%的用户交易次数不少于5次，超11%的用户交易次数不少于10次
+
+```{r}
+## 杂志订阅用户接入宽带分析
+ttl_count <- dim(df_profession)[1]
+p_broad_access <- sum(df_profession$Broadband.Access.=='Yes')/ttl_count
+p_broad_access
+```
+
+```{r}
+## 该杂志订阅用户投资活动分析
+p_have_investment <- sum(df_profession$Value.of.Investments....>0)/ttl_count
+p_have_investment
+```
+
+```{r}
+breaks <- seq(0,150000,by=30000)
+investment_cut <- cut(df_profession$Value.of.Investments....,breaks=breaks,right=FALSE)  # 左闭右开区间
+investment_cut_rate <- table(investment_cut)/ttl_count
+investment_cut_rate
+```
+
+```{r}
+## 该杂志订阅用户交易频次分析
+p_have_transaction <- sum(df_profession$Number.of.Transactions>0)/ttl_count
+p_have_transaction
+breaks <- seq(0,25,by=5)
+transaction_cut <- cut(df_profession$Number.of.Transactions,breaks=breaks,right=FALSE)  # 左闭右开区间
+transaction_cut_rate <- table(transaction_cut)/ttl_count
+transaction_cut_rate
+```
+
+#### 5.这本杂志是否适合为销售幼儿教育软件和电脑游戏的公司做广告  
+
+- 适合，原因如下：  
+  - 由上分析知，有超62%的杂志订阅用户接入了宽带，即具备接入软件或者游戏的条件
+  - 平均年龄为30.1岁且53%的用户有小孩，用户群体整体年轻，一反面依然处于对电脑游戏有兴趣的年龄层，一方面家里有幼儿需要教育
+
+```{r}
+mean_age <- mean(df_profession$Age)
+mean_age
+```
+
+```{r}
+p_have_children <- sum(df_profession$Have.Children.=='Yes')/ttl_count
+p_have_children
+```
+
+#### 6.就您认为《年轻专业人士》的读者会感兴趣的文章类型发表评论
+
+- 房地产、游戏、育儿、投资风向判断等都可能是读者感兴趣的文章，分析如下：
+  - 订阅用户有56%的用户待购置房产，因此推断房产会是一个感兴趣的话题；
+  - 从上分析可知该用户群体较为年轻、超半数有小孩，因此推断游戏和育儿也是不错的话题；
+  - 从上分析可知该用户群体基本都有投资活动且投资相对频繁，因此推断投资风向判断也是不错的话题。
+
+```{r}
+p_have_estate <- sum(df_profession$Real.Estate.Purchases.=='No')/ttl_count
+p_have_estate
+```
+
+## 第5题：假设检验-质量问题
+
+### 数据载入
+
+```{r}
+filepath <- "(C:/Users/huxio/Desktop/武汉大学MEM/2.商业数据分析/作业2/Quality.csv)"
+df_quality <- read.csv(filepath)
+head(df_quality,5)
+```
+
+### 数据分析
+#### 1.提供每个样本的检验p值
+
+- Sample.1:p值 0.2810083 ; 样本均值: 11.95867 临界区间:z≤ 11.85991或z≥ 12.05743
+- Sample.2:p值 0.4546503 ; 样本均值: 12.02867 临界区间:z≤ 11.92991或z≥ 12.12743 
+- Sample.3:p值 0.003790318 ; 样本均值: 11.889 临界区间:z≤ 11.79024或z≥ 11.98776 
+- Sample.4:p值 0.03389336 ; 样本均值: 12.08133 临界区间:z≤ 11.98257或z≥ 12.18009 
+
+```{r}
+## 计算每个样本的p值和临界区间(双侧检验，拒绝H0时)
+s_p_value <- function(df_s,alpha,n,sigma,miu_0){
+  mean_s = mean(df_s)
+  sd = sd(df_s)
+  sem = sigma/sqrt(n)
+  z = abs(mean_s-miu_0)/sem
+  s_p_value = (1-pnorm(z))*2  
+  ubound = qnorm(1-alpha/2)*sem+mean_s
+  lbound = -qnorm(1-alpha/2)*sem+mean_s
+  cat('样本标准差',sd,'\n')
+  cat('p值',s_p_value,';','样本均值:',mean_s,'临界区间:z≤',lbound,'z≥',ubound,'\n')
+}
+
+cat(s_p_value(df_quality$Sample.1,0.01,30,0.21,12)
+,s_p_value(df_quality$Sample.2,0.01,30,0.21,12) 
+,s_p_value(df_quality$Sample.3,0.01,30,0.21,12) 
+,s_p_value(df_quality$Sample.4,0.01,30,0.21,12) 
+)
+```
+
+#### 2.标准差制定是否合理
+
+- 结果为0.2134979，故定标准差为0.21合理
+
+```{r}
+mean(c(0.220356,0.220356,0.2071706,0.206109))
+```
+
+#### 3.计算样本均值的上下限
+
+- 答案如题1
+
+#### 4.提高显著性水平的意义
+
+- 将显著性水平（α）提高到一个更大的值时，这意味着我们降低了拒绝原假设(H0)的门槛，即更容易拒绝原假设，将会导致观察到的数据与原假设之间的差异可能并不足以表明存在真正的效应或差异
+
+## 第6题：Vacation occupancy rates
+
+### 数据载入
+
+```{r}
+filepath <- r"(C:/Users/huxio/Desktop/武汉大学MEM/2.商业数据分析/作业2/Occupancy.csv)"
+df_vacation <- read.csv(filepath)
+df_vacation_cleaned <- df_vacation[-1,]  # 数据清洗
+names(df_vacation_cleaned) <- c('March_2007','March_2008')
+head(df_vacation_cleaned,5)
+```
+
+### 数据分析
+
+#### 1.估算2007年3月第一周和2008年3月第一周的出租单位比例
+
+- 2007年3月第1周：0.35；2008年3月第1周：0.4666667
+
+```{r}
+p1 = sum(df_vacation_cleaned$March_2007=='Yes')/sum(df_vacation_cleaned$March_2007=='Yes' | df_vacation_cleaned$March_2007=='No')
+p2 = sum(df_vacation_cleaned$March_2008=='Yes')/sum(df_vacation_cleaned$March_2008=='Yes' | df_vacation_cleaned$March_2008=='No')
+print(p1)
+cat(p1,p2)
+```
+
+#### 2.为这两个比例之差提供一个95%的置信区间
+
+- 置信区间为：(-0.22031818,-0.01301516)
+
+```{r}
+## 由于n1*(1-p1)和n2*(1-p2)都大于5，可使用正态分布开展区间估计
+n1 = sum(df_vacation_cleaned$March_2007=='Yes' | df_vacation_cleaned$March_2007=='No')
+n2 = sum(df_vacation_cleaned$March_2008=='Yes' | df_vacation_cleaned$March_2008=='No')
+x = p1 - p2
+sem = sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+c(x+qnorm(0.025)*sem,x+qnorm(1-0.025)*sem)
+```
+
+#### 3.租赁费率判断
+
+- 设立下侧检验为：h0:P1-P2>=0,h1:P1-P2<0,在置信度为0.05为前提下，拒绝域为样本均值需小于等于-0.08698709,因为p1-p2为-0.117,小于拒绝域上限，故拒绝原假设，即2008年3月的租赁费率会高于1年前。
+
+```{r}
+ubound = qnorm(0.05)*sem
+ubound
+```
+
+## 第7题：Air Force Training Program 
+
+### 数据导入
+
+```{r}
+filepath <- r"(C:/Users/huxio/Desktop/武汉大学MEM/2.商业数据分析/作业2/Training.csv)"
+df_train <- read.csv(filepath)
+head(df_train,5)
+```
+
+### 数据分析
+
+#### 1.使用适当的描述性统计量来总结每种方法的培训时间数据
+
+- 提议的方法与当前的方法比较结果为：最短学习时长增加，从原本的65增加到69；中位数一致，都位76；平均学习时长稍有增加，从75.07增加到75.43；最大学习时长有所改善，从84降到了82。
+
+```{r}
+summary(df_train)
+```
+
+#### 2.评论两种方法下总体均值的差异
+
+- 从均值结果知两者方法的总体均值一致，但无法确定这是否为偶然现象,进一步通过t检验发现，在置信度为0.05的基础下，两种学习方式对降低平均学习时长无显著差异。
+
+  - 构建右侧假设t检验
+```{r}
+# 基于提议的方法有所改善学习时长构建右侧假设检验
+# H0:μ_d=0 H1:μ_d≠0 置信度为0.05 其中p_d为当前学习方式与提议学习方式的总体均值差
+alpha = 0.05
+df_train$d <- df_train$Current - df_train$Proposed # 构建差值统计量
+mean_d = mean(df_train$d)
+sd_d = sd(df_train$d)
+mean_d
+sd_d
+
+# 由于总体方差未知，此处使用t检验
+n = nrow(df_train)-1
+sem = sd_d/sqrt(n)
+sem
+```
+  - 接受域为(-1.519227,1.519227),因为样本均值-0.3606557落在了接受域内，故接受原假设，两种学习方式对降低平均学习时长无显著差异
+```{r}
+t_critical <- qt(alpha/2, n)
+t_critical
+c(t_critical*sem,abs(t_critical)*sem)
+```
+  - p值为0.5300891大于置信度0.05，故接受原假设，两种学习方式对降低平均学习时长无显著差异，与上述接受域检验的结果一致
+```{r}
+pt((mean_d-0)/sem,n)*2
+```
+
+#### 3.计算每种培训方法的标准差和方差及每种培训方法的总体方差是否相等假设检验
+
+- 两种培训方式的标准差和方差：
+当前培训方式和提议方式方差分别为： 15.5623 6.281967 
+当前培训方式和提议方式标准差分别为： 3.944907 2.506385
+
+```{r}
+sd_current = sd(df_train$Current)
+sd_proposed = sd(df_train$Proposed)
+var_current = sd_current^2
+var_proposed = sd_proposed^2
+var_d = var_current-var_proposed
+cat('当前培训方式和提议方式方差：',var_current,var_proposed
+    ,'\n'
+    ,'当前培训方式和提议方式标准差：',sd_current,sd_proposed)
+```
+- 使用F检验法开展假设检验
+假设检验：H0:方差相等 H1:方差不等，置信度为0.05，在这样的条件下：
+因为样本构建F统计量的值为2.477296不在接受域范围内，故拒绝原假设，即两种培训方法的总体方差不相等；
+p值为0.0005780315,明显小于0.05的显著性水平，故拒绝原假设，即两种培训方法的总体方差不相等；
+
+```{r}
+# 求接受域
+c(qf(alpha/2,df1=n,df2=n),qf(1-alpha/2,df1=n,df2=n))
+```
+```{r}
+f_sem = var_current/var_proposed
+f_sem
+```
+
+```{r}
+# 求P值
+p_value = (1-pf(f_sem,df1 = n,df2=n))*2
+p_value
+```
+
+#### 4. 您能得出关于这两种方法之间差异的什么结论？您有什么建议？解释原因。
+- 基于0.05的置信度水平，这2种方法测试出的学生平均学习时长一致，即可认为这2种方式在降低学生平均学习时长方面无显著差异；
+- 但从方差来看，提议方式的方差小于当前学习方式的方差，可认为提议方式可减少快速学习的学生需要等待慢速学习的学生的时间，可降低大家学习时长的差距。
+
+#### 5. 在就未来要使用的培训计划做出最终决定之前，您能否建议其他数据或测试？
+- 建议扩大样本容量，降低第I类错误发生的概率；
+- 建议增加学习成果检验测试。学习时长不能代表学习效果，建议增加学习成果检验的考试，以考试成绩来说明这2种方式的差异。
+
+## 第8题：Camry二手车价格预测
+
+### 数据导入
+
+```{r}
+filepath <- r"(C:/Users/huxio/Desktop/武汉大学MEM/2.商业数据分析/作业2/Camry.csv)"
+df_camry <- read.csv(filepath)
+df_camry <- rename(df_camry,miles=Miles..1000s.,price=Price...1000s.,) # 重命名字段
+head(df_camry,5)
+```
+
+### 数据分析
+
+#### 1.制作一个散点图，横轴表示汽车里程数，纵轴表示价格
+```{r}
+ggplot(data=df_camry,mapping=aes(x=miles,y=price))+
+  geom_point()+
+  geom_smooth()
+```
+
+#### 2.在部分（a）中制作的散点图表明了两个变量之间的什么关系
+
+- 整体呈现出随着里程数的增加，销售价格下降的趋势。
+
+#### 3. 开发一个估计回归方程，用于在给定里程数（千英里）的情况下预测价格（千美元）
+
+- 估计回归方程为:price = -0.05877*miles+16.46976
+
+```{r}
+plot(df_camry)
+abline(lm(df_camry$price ~ df_camry$miles), color="red", lwd=2)
+```
+```{r}
+model <- lm(df_camry$price ~ df_camry$miles)
+summary(model)
+```
+
+#### 4.在0.05的显著性水平下检验是否存在显著关系
+
+- 里程数和价格之间存在显著性关系。通过构建建设检验：H0:k=0,H1:k≠0，其中k为miles的系数,当k为0说明price与miles不相关，假设检验结果为： 
+  - 从p-value看：当前p值为0.0003475小于显著性水平0.05，即拒绝了原假设，故在显著性水平0.05的假设下，即里程数和价格之间存在显著性关系；
+  - 从拒绝域来看:拒绝域为(-∞,0.001011395)和(6.042013,+∞),样本的F值为19.85落在右侧拒绝域内，故拒绝原假设，即里程数和价格之间存在显著性关系。
+
+```{r}
+ubound = qf(1-0.025,1,17)
+lbound = qf(0.025,1,17)
+cat(lbound,ubound)
+```
+
+#### 5. 估计的回归方程是否拟合良好？
+
+- 从summary的结果值,拟合优度为0.5387,调整后的拟合优度为0.5115,说明里程数是影响销售价格的一个重要的影响因素。
+
+#### 6. 对估计回归方程的斜率进行解释
+
+- 从summary的结果值,斜率为-0.05877,含义为里程数每增加1000英里，价格预计下降58.77美金。
+
+#### 7.价格预测:里程为60000公里,预测价格，且这是您会向卖家提供的价格吗？
+
+- 根据模型预测出价格为12943.56美元，这个价格可以作为参考价格，但最后出价还需结合剩余保修期、品牌售后服务水平和卖方身份如个人还是代理商等综合考虑。
+
+```{r}
+x_miles =  60 # 单位为千美元
+predict_price = -0.05877*x_miles+16.46976
+predict_price
+```
+
+## 第9题：网站客户流失分析
+
+### 数据导入
+
+```{r}
+filepath <- r"(C:/Users/huxio/Desktop/武汉大学MEM/2.商业数据分析/作业2/WE.xlsx)"
+df_we <- read_excel(filepath)
+df_we <- rename(df_we
+                ,customer_id=客户ID,is_lost=流失,happy_index=当月客户幸福指数
+                ,happy_index_change=客户幸福指数相比上月变化,customer_support=当月客户支持
+                ,support_change=客户支持相比上月的变化,service_priority=当月服务优先级
+                ,service_priority_change=服务优先级相比上月的变化,log_times=当月登录次数
+                ,blog_change=博客数相比上月的变化,log_times_change=访问次数相比上月的增加
+                ,used_duration=客户使用期限,log_lag_change=访问间隔变化)
+head(df_we,5)
+```
+
+### 数据分析
+
+#### 1.获取所有变量按照流失和未流失分类的均值
+
+```{r}
+df_we_mean <- select(df_we,2:length(df_we)) %>% 
+  group_by(is_lost) %>% 
+  summarize_all(mean)
+kable(select(df_we_mean,1:6),align='l')
+```
+
+```{r}
+kable(select(df_we_mean,1,7:12),align='l')
+```
+
+#### 2.计算每个变量流失均值和未流失均值的差值是否显著(流失为0,未流失为1)
+
+```{r}
+df_result <- tibble(
+  variable = character()
+  ,estimate = numeric()
+  ,estimate_lost = numeric()
+  ,estimate_not_lost = numeric() 
+  ,statistic = numeric()
+  ,p_value = numeric() 
+  ,parameter = numeric() 
+  ,conf_low = numeric() 
+  ,conf_up = numeric() 
+  ,method = character()
+)
+
+simple_variable_t_test <- function(df_result,col){
+  x <- df_we[[col]][df_we$is_lost==0]
+  y <- df_we[[col]][df_we$is_lost==1]
+  mean_x = mean(x)
+  mean_y = mean(y)
+  mean_df = mean_x - mean_y
+  # 假设检验：H0:x_d_miu=0,H1:x_d_miu≠0
+  t_result <- t.test(x,y)
+  lbound = t_result$conf.int[1] # 置信区间下限
+  ubound = t_result$conf.int[2] # 置信区间上限
+  p_value = t_result$p.value # p值
+  t_statistic = t_result$statistic # 样本统计量
+  t_method = t_result$method # 检验
+  parameter = t_result$parameter # 自由度
+  # 结果输入
+  df_result <- add_row(df_result,variable=col,estimate=mean_df,estimate_lost=mean_x,estimate_not_lost=mean_y
+          ,statistic=t_statistic,p_value=p_value,parameter=parameter,conf_low=lbound,conf_up=ubound,method=t_method)
+  return(df_result)
+}
+
+for (col in names(df_we)[3:length(df_we)]){
+  df_result <- simple_variable_t_test(df_result,col)
+}
+df_result
+```
+
+#### 3.以”流失“为因变量，其他你认为重要的变量为⾃变量（提示：a、b两步的发现），建⽴回归⽅程对是否流失进⾏预测
+
+- 从上述P值知，客户支持相比上月的变化和服务优先级相比上月的变化这2个变量不存在显著性差异，故回归方程建立仅考虑除这2个变量之外的所有变量。
+
+```{r}
+we_model <- glm(formula = is_lost ~ happy_index + happy_index_change + customer_support
+      + service_priority + log_times + blog_change + log_times_change +used_duration+log_lag_change
+    ,family = binomial(link = "logit"), data = df_we)
+summary(we_model)
+```
+
+#### 4.根据上⼀步预测的结果，对尚未流失（流失=0）的客户进⾏流失可能性排序，并给出流失可能性最⼤的前100名⽤户ID列表
+
+```{r}
+df_lost_predict <- df_we[df_we$is_lost==1,]
+df_lost_predict <- df_lost_predict %>%  # 流失即为1
+  mutate(prediction = predict(we_model,newdata=df_lost_predict,type='response')) %>% 
+  arrange(prediction) %>% 
+  select(customer_id, is_lost,prediction,everything()) # 将预测列移动到流失值后面
+head(df_lost_predict,100)
+```
+
+
+
